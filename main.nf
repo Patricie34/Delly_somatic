@@ -82,12 +82,14 @@ process delly_post_fiter {
 }
 
 
-
 workflow {
-    // create channel
-    tsv_ch = Channel.fromPath("Delly_somatic/samplesheet.tsv")
+    tsv_ch = Channel.fromPath("samplesheet.tsv")
     | splitCsv( header: true )
-    | map { row -> [[id: row.id, repeat: row.repeat, type: row.type], [file(row.bam), file(row.bai)]] }
+    | map { row -> 
+    def bam_path = file(")
+    def bai_path = file(")
+    [[sample_id: row.sample_id, name: row.name, type: row.type], [bam_path, bai_path]]
+    }
     | branch { meta, reads ->
         tumor: meta.type == "tumor"
         normal: meta.type == "normal"
@@ -96,6 +98,7 @@ workflow {
 
     samples.tumor.view()
     samples.normal.view()
+ 
 }
 
 
