@@ -86,8 +86,8 @@ workflow {
     tsv_ch = Channel.fromPath("samplesheet.tsv")
     | splitCsv( header: true )
     | map { row -> 
-    def bam_path = file(")
-    def bai_path = file(")
+    def bam_path = file("")
+    def bai_path = file("")
     [[sample_id: row.sample_id, name: row.name, type: row.type], [bam_path, bai_path]]
     }
     | branch { meta, reads ->
