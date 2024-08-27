@@ -47,7 +47,7 @@ process SAMTOOLS_BWA {
 
 // Mark duplicates & index
 process MARK_DUPLICATES {
-    publishDir "${params.pubdir}/${patient_id}/mark_dup/", mode: 'copy'
+    publishDir "${params.pubdir2}/${patient_id}/delly_hg38/", mode: 'copy'
     container "broadinstitute/gatk:latest"
     tag "MARK_DUPLICATES on ${patient_id}_${meta.sample_id}"
     debug true
@@ -149,7 +149,7 @@ process DELLY_GEN {
   
 // Post-filtering for somatic SVs
 process DELLY_POSTFILTER {
-    publishDir "${params.pubdir}/delly_postfil", mode: 'copy'
+    publishDir "${params.pubdir2}/${patient_id}/delly_hg38/", mode: 'copy'
     container "quay.io/biocontainers/mulled-v2-aaf75b349de6d380ac6d4a206d51c2d696678b2a:f3c6faf275e70708a7635731117f172a7eafdd14-0"
     tag "DELLY_POSTFILTER ON ${patient_id}"
     label "s_mem"
@@ -226,8 +226,7 @@ process ALFRED {
 
 // Modify final tables
 process MERGE_TSV {
-    publishDir("/storage/01.NanoBreak/data/samples/${patient_id}/delly_hg38/", mode: 'copy')
-    // publishDir "${params.pubdir}/test", mode: 'copy'
+    publishDir "${params.pubdir2}/${patient_id}/delly_hg38/", mode: 'copy'
     container "quay.io/biocontainers/mulled-v2-76a0b41e09773ed659596514b804bc832021772e:d50820554e481bef847e84d0590124e985594f5d-0"
     tag "MERGE_TSV on ${patient_id}"
     debug true
@@ -268,7 +267,7 @@ process DELLY_CNV {
 
 // Save files with read-depth coverages
 process CNV_UNZIP {
-    publishDir("/storage/01.NanoBreak/data/samples/${patient_id}/delly_hg38/CNV_cov/", mode: 'copy', pattern: "*.cov")
+    publishDir "${params.pubdir2}/${patient_id}/delly_hg38/CNV_cov/", mode: 'copy', pattern: "*.cov"
     container "ubuntu:22.04"
     tag "CNV_UNZIP on ${patient_id}_${meta.sample_id}"
     debug true
@@ -288,7 +287,7 @@ process CNV_UNZIP {
 
 // Generation of plots using CNV profiles & segmentation
 process CNV_PROFILES {
-    publishDir("/storage/01.NanoBreak/data/samples/${patient_id}/delly_hg38/CNV_plots/", mode: 'copy')
+    publishDir "${params.pubdir2}/${patient_id}/delly_hg38/CNV_plots/", mode: 'copy'
     // publishDir("${params.pubdir}/${patient_id}/Rplots", mode: 'copy')
     container "patricie/my-r-dnacopy-image:latest"
     tag "CNV_PROFILES on ${patient_id}_${meta.sample_id}"
@@ -309,7 +308,7 @@ process CNV_PROFILES {
 
 // Optional
 process CNV_CALLS {
-    publishDir("${params.pubdir}/${patient_id}/cnv_calls", mode: 'copy')
+    // publishDir("${params.pubdir}/${patient_id}/cnv_calls", mode: 'copy')
     container "staphb/bcftools:latest"
     tag "CNV_CALLS on ${patient_id}_${meta.sample_id}"
     label "xxs_mem"
@@ -328,7 +327,7 @@ process CNV_CALLS {
 
 // Optional - visualize the CNV calls
 process CNV_CALL_PLT {
-    publishDir("${params.pubdir}/${patient_id}/cnv_calls", mode: 'copy')
+    // publishDir("${params.pubdir}/${patient_id}/cnv_calls", mode: 'copy')
     container "patricie/my-r-dnacopy-image:latest"
     tag "CNV_CALL_PLT on ${patient_id}_${meta.sample_id}"
     debug true

@@ -2,7 +2,7 @@ include { test_bamToFastq_bwa; SAMTOOLS_BWA; MARK_DUPLICATES; DELLY_CALL; DELLY_
 DELLY_POSTFILTER; BCFTOOLS; ALFRED; MERGE_TSV; DELLY_CNV; CNV_UNZIP; CNV_PROFILES; CNV_CALLS; CNV_CALL_PLT  } from "${params.projectDirectory}/modules"
 
 workflow {
-    tsv_ch = Channel.fromPath("/home/user/Delly_somatic/samples_all_WGS.csv")
+    tsv_ch = Channel.fromPath("/storage2/delly/Delly_somatic/samples_all_WGS.csv")
     . splitCsv( header: true)
     . map { row -> 
     def path_bam = file("/storage/delly_hg38_allSamples_BAM/${row.sample_id}.recal.bam")
