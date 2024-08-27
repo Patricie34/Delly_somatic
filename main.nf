@@ -10,13 +10,8 @@ workflow {
     [[patient_id: row.patient_id, sample_id: row.sample_id, type: row.type, cont: row.cont], [bam: path_bam, bai: path_bai]]
     } 
     // .view()
-    //def selected_samples = [
-        // "patient_id"]
-    
+        
     fastq_ch = tsv_ch.map{ it -> [it[0].patient_id, it[0], it[1].bam, it[1].bai]}
-    // .filter { it[0] == "patient_id" }
-    .filter { it[0] in selected_samples}
-    // .take(40)
     // .view() 
             
     bwa_ch = SAMTOOLS_BWA(fastq_ch)
@@ -71,14 +66,15 @@ workflow {
 
     // cnv_ch = mark_dup_ch.map{ it -> [it[0], it[1], it[2], it[4]]}.view()
     // delly_cnv_ch = DELLY_CNV(cnv_ch)
+    // .filter { it[0] == "BRNO0501" }
     // .view()
 
-    // this runs only ones
+    // // this runs only ones
     // unzip_ch = CNV_UNZIP(delly_cnv_ch)
 
     // plot_ch = CNV_PROFILES(delly_cnv_ch) //(delly_cnv_ch.first())
 
-    // optional
+    // // optional
     // bcfcnv_ch = CNV_CALLS(delly_cnv_ch)
     // cnvPlt_ch = CNV_CALL_PLT (bcfcnv_ch)
 

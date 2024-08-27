@@ -5,7 +5,6 @@ process test_bamToFastq_bwa{
     publishDir "${params.pubdir}/test/", mode: 'copy'
     container "quay.io/biocontainers/mulled-v2-fe8faa35dbf6dc65a0f7f5d4ea12e31a79f73e40:23592e4ad15ca2acfca18facab87a1ce22c49da1-0"
     label "m_mem"
-    label "s_cpu"
     debug true
     
     input:
@@ -29,18 +28,12 @@ process SAMTOOLS_BWA {
     tag "samtools_bwa on ${patient_id}_${meta.sample_id}"
     debug true
     label "l_mem"
-    label "l_cpu"
-
+    
     input:
     tuple val(patient_id), val(meta), path(bam), path(bai)
     
     output:
-    tuple val(patient_id), 
-    val(meta), 
-    path("${meta.sample_id}.fastq"), 
-    path("${meta.sample_id}.sam"), 
-    path("${meta.sample_id}.bam"), 
-    path("${meta.sample_id}_sorted.bam")
+    tuple val(patient_id), val(meta), path("${meta.sample_id}_sorted.bam")
 
     script:
     """
@@ -59,16 +52,14 @@ process MARK_DUPLICATES {
     tag "MARK_DUPLICATES on ${patient_id}_${meta.sample_id}"
     debug true
     label "m_mem"
-    label "m_cpu"
-    
+        
     input:
-    tuple val(patient_id), val(meta), path(fastq), path(sam), path(bam), path(sort_mapped_bam)
+    tuple val(patient_id), val(meta), path(sort_mapped_bam)
     
     output:
     tuple val(patient_id), 
     val(meta), 
     path("${meta.sample_id}_sorted_mapped_MD.bam"), 
-    path("${meta.sample_id}_marked_dup_metrics.txt"), 
     path("${meta.sample_id}_sorted_mapped_MD.bai")
 
     script:
@@ -88,9 +79,8 @@ process DELLY_CALL {
     container "dellytools/delly:latest"
     tag "DELLY_CALL on ${patient_id}"
     debug true
-    label "s_mem"
-    label "m_cpu"
-
+    label "m_mem"
+    
     input:
     tuple val(patient_id), val(normal_meta), path(normal_bam), path(normal_bai), val(tumor_meta), path(tumor_bam), path(tumor_bai)
     
@@ -113,8 +103,7 @@ process DELLY_PREFILTER {
     tag "DELLY_PREFILTER on ${patient_id}"
     debug true
     label "xxs_mem"
-    label "m_cpu"
-    
+        
     input:
     tuple val(patient_id), val(normal_meta), val(tumor_meta), path(bcf), path(bcf_csi)
         
@@ -143,8 +132,7 @@ process DELLY_GEN {
     tag "DELLY_GEN ON ${patient_id}"
     debug true
     label "m_mem"
-    label "m_cpu"
-
+    
     input:
     tuple val(patient_id), val(normal_meta), val(tumor_meta), path(pre_bcf), path(pre_bcf_csi), path(tumor_bam), path(tumor_bai), val(normal_bams), val(normal_bais)
     
@@ -165,8 +153,7 @@ process DELLY_POSTFILTER {
     container "quay.io/biocontainers/mulled-v2-aaf75b349de6d380ac6d4a206d51c2d696678b2a:f3c6faf275e70708a7635731117f172a7eafdd14-0"
     tag "DELLY_POSTFILTER ON ${patient_id}"
     label "s_mem"
-    label "s_cpu"
-    
+        
     input:
     tuple val(patient_id), val(normal_meta), val(tumor_meta), path(geno_bcf), path(geno_bcf_csi)
         
@@ -195,7 +182,7 @@ process BCFTOOLS {
     container "staphb/bcftools:latest"
     tag "bcftools_${patient_id}"
     debug true
-    memory '50 MB'
+    label "xxs_mem"
 
     input:
     tuple val(patient_id), path(bcf), path(bcf_sci)//, path(tsv)
@@ -223,8 +210,7 @@ process ALFRED {
     tag "ALFRED on ${patient_id}"
     debug true
     label "xxs_mem"
-    label "s_cpus"
-
+    
     input:
     tuple val(patient_id), path("${patient_id}.sv.tsv"), path("${patient_id}.input.tsv")
 
@@ -246,8 +232,7 @@ process MERGE_TSV {
     tag "MERGE_TSV on ${patient_id}"
     debug true
     label "xxs_mem"
-    label "s_cpus"
-
+    
     input:
     tuple val(patient_id), path("${patient_id}.sv.gene.tsv"), path("${patient_id}.input.tsv")
 
@@ -267,8 +252,7 @@ process DELLY_CNV {
     tag "DELLY_CNV on ${patient_id}_${meta.sample_id}"
     debug true
     label "s_mem"
-    label "s_cpus"
-
+    
     input:
     tuple val(patient_id), val(meta), path(bam), path(bai)
 
@@ -284,12 +268,12 @@ process DELLY_CNV {
 
 // Save files with read-depth coverages
 process CNV_UNZIP {
+    publishDir("/storage/01.NanoBreak/data/samples/${patient_id}/delly_hg38/CNV_cov/", mode: 'copy', pattern: "*.cov")
     container "ubuntu:22.04"
     tag "CNV_UNZIP on ${patient_id}_${meta.sample_id}"
     debug true
     label "xxs_mem"
-    label "s_cpus"
-
+    
     input:
     tuple val(patient_id), val(meta), path(bcf), path(cov)
 
@@ -304,13 +288,13 @@ process CNV_UNZIP {
 
 // Generation of plots using CNV profiles & segmentation
 process CNV_PROFILES {
+    publishDir("/storage/01.NanoBreak/data/samples/${patient_id}/delly_hg38/CNV_plots/", mode: 'copy')
     // publishDir("${params.pubdir}/${patient_id}/Rplots", mode: 'copy')
     container "patricie/my-r-dnacopy-image:latest"
     tag "CNV_PROFILES on ${patient_id}_${meta.sample_id}"
     debug true
     label "xs_mem"
-    label "s_cpus"
-
+    
     input:
     tuple val(patient_id), val(meta), path(bcf), path(cov)
 
@@ -329,8 +313,7 @@ process CNV_CALLS {
     container "staphb/bcftools:latest"
     tag "CNV_CALLS on ${patient_id}_${meta.sample_id}"
     label "xxs_mem"
-    label "s_cpus"
-
+    
     input:
     tuple val(patient_id), val(meta), path(bcf), path(cov)
 
@@ -350,8 +333,7 @@ process CNV_CALL_PLT {
     tag "CNV_CALL_PLT on ${patient_id}_${meta.sample_id}"
     debug true
     label "xs_mem"
-    label "s_cpus"
-
+    
     input:
     tuple val(patient_id), val(meta), path(bed), path(cov)
 
