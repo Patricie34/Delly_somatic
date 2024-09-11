@@ -98,9 +98,9 @@ process DELLY_CALL {
 
 // Somatic pre-filtering
 process DELLY_PREFILTER {
-    // publishDir "${params.pubdir}/${patient_id}/delly_prefil", mode: 'copy'
+    publishDir "${params.pubdir}/${patient_id}/delly_prefil", mode: 'copy'
     container "dellytools/delly:latest"
-    tag "DELLY_PREFILTER on ${patient_id}"
+    tag "DELLY_PREFILTER on ${patient_id}_${tumor_meta.sample_id}"
     debug true
     label "xxs_mem"
         
@@ -108,7 +108,7 @@ process DELLY_PREFILTER {
     tuple val(patient_id), val(normal_meta), val(tumor_meta), path(bcf), path(bcf_csi)
         
     output:
-    tuple val(patient_id), val(normal_meta), val(tumor_meta), path("${patient_id}.pre.bcf"), path("${patient_id}.pre.bcf.csi")//, path("sample.tsv")
+    tuple val(patient_id), val(normal_meta), val(tumor_meta), path("${patient_id}_${tumor_meta.sample_id}.pre.bcf"), path("${patient_id}_${tumor_meta.sample_id}.pre.bcf.csi")//, path("sample.tsv")
 
     script:
     """
@@ -121,85 +121,88 @@ process DELLY_PREFILTER {
     elif [[ "${tumor_meta.type}" == "tumor" ]]; then
         cont_value=${tumor_meta.cont}
     fi
-    delly filter -f somatic -c \$cont_value -o ${patient_id}.pre.bcf -s sample.tsv $bcf 
+    delly filter -f somatic -c \$cont_value -o ${patient_id}_${tumor_meta.sample_id}.pre.bcf -s sample.tsv $bcf 
     """
 }   
 
 // Genotype pre-filtered somatic sites
 process DELLY_GEN {
-    // publishDir "${params.pubdir}/${patient_id}/delly_gen", mode: 'copy'
+    publishDir "${params.pubdir}/${patient_id}/delly_gen", mode: 'copy'
     container "dellytools/delly:latest"
-    tag "DELLY_GEN ON ${patient_id}"
+    tag "DELLY_GEN ON ${patient_id}_${sample_id}"
     debug true
     label "m_mem"
     
     input:
-    tuple val(patient_id), val(normal_meta), val(tumor_meta), path(pre_bcf), path(pre_bcf_csi), path(tumor_bam), path(tumor_bai), val(normal_bams), val(normal_bais)
+    tuple val(patient_id), val(sample_id), val(normal_meta), val(tumor_meta), path(pre_bcf), path(pre_bcf_csi), path(tumor_bam), path(tumor_bai), val(normal_bams), val(normal_bais)
     
     output:
-    tuple val(patient_id), val(normal_meta), val(tumor_meta), path("${patient_id}.geno.bcf"), path("${patient_id}.geno.bcf.csi")
+    tuple val(patient_id), val(sample_id), val(normal_meta), val(tumor_meta), path("${patient_id}_${sample_id}.geno.bcf"), path("${patient_id}_${sample_id}.geno.bcf.csi")
 
     script:
     """
     echo DELLY_GEN ${patient_id}
     export OMP_NUM_THREADS=${task.cpus}
-    delly call -g ${params.ref} -v ${pre_bcf} -o ${patient_id}.geno.bcf -x ${params.reg} $tumor_bam $normal_bams
+    delly call -g ${params.ref} -v ${pre_bcf} -o ${patient_id}_${sample_id}.geno.bcf -x ${params.reg} $tumor_bam $normal_bams
     """
 }
   
 // Post-filtering for somatic SVs
 process DELLY_POSTFILTER {
-    publishDir "${params.pubdir2}/${patient_id}/delly_hg38/", mode: 'copy'
+    // publishDir "${params.pubdir2}/${patient_id}/delly_hg38/", mode: 'copy'
+    publishDir "${params.pubdir}/${patient_id}/delly_postfil", mode: 'copy'
     container "quay.io/biocontainers/mulled-v2-aaf75b349de6d380ac6d4a206d51c2d696678b2a:f3c6faf275e70708a7635731117f172a7eafdd14-0"
-    tag "DELLY_POSTFILTER ON ${patient_id}"
+    tag "DELLY_POSTFILTER ON ${patient_id}_${sample_id}"
     label "s_mem"
         
     input:
-    tuple val(patient_id), val(normal_meta), val(tumor_meta), path(geno_bcf), path(geno_bcf_csi)
+    tuple val(patient_id), val(sample_id), val(normal_meta), val(tumor_meta), path(geno_bcf), path(geno_bcf_csi)
         
     output:
-    tuple val(patient_id), path("${patient_id}.bcf"), path("${patient_id}.bcf.csi")//, path("samples.tsv")
+    tuple val(patient_id), val(sample_id), path("${patient_id}_${sample_id}.bcf"), path("${patient_id}_${sample_id}.bcf.csi")//, path("samples.tsv")
 
     script:
     """
     echo DELLY_POSTFILTER ${patient_id}
     sample_names=\$(bcftools query -l "${geno_bcf}")
-    echo -e "${tumor_meta.sample_id}_sorted_mapped_MD\\ttumor" > samples.tsv
+    echo -e "${sample_id}_sorted_mapped_MD\\ttumor" > samples.tsv
     
     for sample_name in \${sample_names}; do
-        if [ "\${sample_name}" != "${tumor_meta.sample_id}_sorted_mapped_MD" ]; then
+        if [ "\${sample_name}" != "${sample_id}_sorted_mapped_MD" ]; then
             echo -e "\${sample_name}\\tcontrol" >> samples.tsv
         fi
     done
 
-    delly filter -f somatic -o ${patient_id}.bcf -s samples.tsv ${geno_bcf}
+    delly filter -f somatic -o ${patient_id}_${sample_id}.bcf -s samples.tsv ${geno_bcf}
     """
 }
 
+// set parameter -a to 0.1 to 0.05 for low purity samples in delly filter
+
 // Parsing bcf files
 process BCFTOOLS {
-    // publishDir "${params.pubdir}/test", mode: 'copy'
+    publishDir "${params.pubdir}/${patient_id}/bcftools", mode: 'copy'
     container "staphb/bcftools:latest"
-    tag "bcftools_${patient_id}"
+    tag "bcftools_${patient_id}_${sample_id}"
     debug true
     label "xxs_mem"
 
     input:
-    tuple val(patient_id), path(bcf), path(bcf_sci)//, path(tsv)
+    tuple val(patient_id), val(sample_id), path(bcf), path(bcf_sci)//, path(tsv)
 
     output:
-    tuple val(patient_id), path("${patient_id}.sv.tsv"), path("${patient_id}.input.tsv")
+    tuple val(patient_id), val(sample_id), path("${patient_id}_${sample_id}.sv.tsv"), path("${patient_id}_${sample_id}.input.tsv")
 
     script:
     """
-    bcftools query -f "%CHROM\t%POS\t%CHROM\t%INFO/END\t%ID\t%INFO/SR\t%INFO/CT[\t%RC][\t%RCL][\t%RCR]\n" ${bcf} | grep -v "BND" > ${patient_id}.sv.tsv 
+    bcftools query -f "%CHROM\t%POS\t%CHROM\t%INFO/END\t%ID\t%INFO/SR\t%INFO/CT[\t%RC][\t%RCL][\t%RCR]\n" ${bcf} | grep -v "BND" > ${patient_id}_${sample_id}.sv.tsv 
     if bcftools view -H ${bcf} | grep "BND" > /dev/null; then
-        bcftools query -f "%CHROM\t%POS\t%INFO/CHR2\t%INFO/POS2\t%ID\t%INFO/SR\t%INFO/CT[\t%RC][\t%RCL][\t%RCR]\n" ${bcf} | grep "BND" >> ${patient_id}.sv.tsv
+        bcftools query -f "%CHROM\t%POS\t%INFO/CHR2\t%INFO/POS2\t%ID\t%INFO/SR\t%INFO/CT[\t%RC][\t%RCL][\t%RCR]\n" ${bcf} | grep "BND" >> ${patient_id}_${sample_id}.sv.tsv
     else
         echo "No BND variants found, skipping BND query step."
     fi
-    cat ${patient_id}.sv.tsv | cut -f 1,2,5,6,7,8,19,30 | sed 's/^chr//' | awk '{print \$1"\\t"(\$2-100)"\\t"(\$2+100)"\\t"\$3"Left\\t"\$4"\\t"\$5"\\t"\$6"\\t"\$7"\\t"\$8;}' > ${patient_id}.input.tsv
-    cat ${patient_id}.sv.tsv | cut -f 3,4,5,6,7,8,19,30 | sed 's/^chr//' | awk '{print \$1"\\t"(\$2-100)"\\t"(\$2+100)"\\t"\$3"Right\\t"\$4"\\t"\$5"\\t"\$6"\\t"\$7"\\t"\$8;}' >> ${patient_id}.input.tsv
+    cat ${patient_id}_${sample_id}.sv.tsv | cut -f 1,2,5,6,7,8,19,30 | sed 's/^chr//' | awk '{print \$1"\\t"(\$2-100)"\\t"(\$2+100)"\\t"\$3"Left\\t"\$4"\\t"\$5"\\t"\$6"\\t"\$7"\\t"\$8;}' > ${patient_id}_${sample_id}.input.tsv
+    cat ${patient_id}_${sample_id}.sv.tsv | cut -f 3,4,5,6,7,8,19,30 | sed 's/^chr//' | awk '{print \$1"\\t"(\$2-100)"\\t"(\$2+100)"\\t"\$3"Right\\t"\$4"\\t"\$5"\\t"\$6"\\t"\$7"\\t"\$8;}' >> ${patient_id}_${sample_id}.input.tsv
     """
 }
 
@@ -343,4 +346,31 @@ process CNV_CALL_PLT {
     """
     Rscript ${params.Rscript} $cov ${meta.sample_id} $bed
     """
+}
+
+// Calculate coverage, average read_lenght, SV
+process COUNT_STATS{
+    publishDir("${params.pubdir}/${patient_id}/stats", mode: 'copy')
+    container ""
+    tag "COUNT_STATS on ${patient_id}_${meta.sample_id}"
+    debug true
+    label "s_mem"
+    
+    input:
+    tuple val(patient_id), path(bam), path(bcf)
+
+    output:
+    path("${patient_id}_stats.txt")
+
+    script:
+    """
+    samtools stats ${bam} > ${patient_id}_stats.txt
+    grep '^COV' ${patient_id}_stats.txt | cut -f 2- >> ${patient_id}_stats.txt
+    py script
+    echo -n "Average length: " >> ${params.patient_id}_stats.txt
+    grep '^SN	average length:' ${params.patient_id}_stats.txt | cut -f 2- >> ${params.patient_id}_stats.txt
+    echo -n "SV count: " >> stats.txt
+    bcftools view -H ${bcf} | wc -l >> ${patient_id}_stats.txt
+    """
+
 }
