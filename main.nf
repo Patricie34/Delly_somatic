@@ -77,7 +77,6 @@ workflow {
 
     // cnv_ch = mark_dup_ch.map{ it -> [it[0], it[1], it[2], it[4]]}.view()
     // delly_cnv_ch = DELLY_CNV(cnv_ch)
-    // .filter { it[0] == "BRNO0501" }
     // .view()
 
     // // this runs only ones
