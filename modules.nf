@@ -149,7 +149,7 @@ process DELLY_GEN {
   
 // Post-filtering for somatic SVs
 process DELLY_POSTFILTER {
-    // publishDir "${params.pubdir2}/${patient_id}/delly_hg38/", mode: 'copy'
+    publishDir "${params.pubdir2}/${patient_id}/delly_hg38/", mode: 'copy'
     publishDir "${params.pubdir}/${patient_id}/delly_postfil", mode: 'copy'
     container "quay.io/biocontainers/mulled-v2-aaf75b349de6d380ac6d4a206d51c2d696678b2a:f3c6faf275e70708a7635731117f172a7eafdd14-0"
     tag "DELLY_POSTFILTER ON ${patient_id}_${sample_id}"
@@ -173,11 +173,9 @@ process DELLY_POSTFILTER {
         fi
     done
 
-    delly filter -f somatic -o ${patient_id}_${sample_id}.bcf -s samples.tsv ${geno_bcf}
+    delly filter -a 0.02 -f somatic -o ${patient_id}_${sample_id}.bcf -s samples.tsv ${geno_bcf}
     """
 }
-
-// set parameter -a to 0.1 to 0.05 for low purity samples in delly filter
 
 // Parsing bcf files
 process BCFTOOLS {
@@ -185,6 +183,7 @@ process BCFTOOLS {
     container "staphb/bcftools:latest"
     tag "bcftools_${patient_id}_${sample_id}"
     debug true
+    errorStrategy "ignore"
     label "xxs_mem"
 
     input:
@@ -208,58 +207,61 @@ process BCFTOOLS {
 
 // Feature annotation
 process ALFRED {
-    // publishDir "${params.pubdir}/test"
+    publishDir "${params.pubdir}/${patient_id}/alfred"
     container "trausch/alfred:latest"
-    tag "ALFRED on ${patient_id}"
+    tag "ALFRED on ${patient_id}_${sample_id}"
     debug true
+    errorStrategy "ignore"
     label "xxs_mem"
     
     input:
-    tuple val(patient_id), path("${patient_id}.sv.tsv"), path("${patient_id}.input.tsv")
+    tuple val(patient_id), val(sample_id), path("${patient_id}_${sample_id}.sv.tsv"), path("${patient_id}_${sample_id}.input.tsv")
 
     output:
-    tuple val(patient_id), path("${patient_id}.sv.gene.tsv"), path("${patient_id}.input.tsv")
+    tuple val(patient_id), val(sample_id), path("${patient_id}_${sample_id}.sv.gene.tsv"), path("${patient_id}_${sample_id}.input.tsv")
     
     script:
     """
-    alfred annotate -d 3000 -g /home/user/delly_k8s/Homo_sapiens.GRCh38.107.gtf.gz -o ${patient_id}.sv.gene.tsv ${patient_id}.input.tsv
-	rm ${patient_id}.sv.tsv gene.bed
+    alfred annotate -d 3000 -g ${params.gtf} -o ${patient_id}_${sample_id}.sv.gene.tsv ${patient_id}_${sample_id}.input.tsv
+	rm ${patient_id}_${sample_id}.sv.tsv gene.bed
     """
 }
 
 // Modify final tables
 process MERGE_TSV {
     publishDir "${params.pubdir2}/${patient_id}/delly_hg38/", mode: 'copy'
+    publishDir "${params.pubdir}/${patient_id}/mergeTsv"
     container "quay.io/biocontainers/mulled-v2-76a0b41e09773ed659596514b804bc832021772e:d50820554e481bef847e84d0590124e985594f5d-0"
-    tag "MERGE_TSV on ${patient_id}"
+    tag "MERGE_TSV on ${patient_id}_${sample_id}"
     debug true
+    errorStrategy "ignore"
     label "xxs_mem"
     
     input:
-    tuple val(patient_id), path("${patient_id}.sv.gene.tsv"), path("${patient_id}.input.tsv")
+    tuple val(patient_id), val(sample_id), path("${patient_id}_${sample_id}.sv.gene.tsv"), path("${patient_id}_${sample_id}.input.tsv")
 
     output:
-    path("${patient_id}.combined.sv.tsv")
+    path("${patient_id}_${sample_id}.combined.sv.tsv")
 
     script:
     """
-    python ${params.script} --input_file1 ${patient_id}.sv.gene.tsv --input_file2 ${patient_id}.input.tsv --intermediate_file ${patient_id}.intermediate.tsv --output_file ${patient_id}.combined.sv.tsv
+    python ${params.script} --input_file1 ${patient_id}_${sample_id}.sv.gene.tsv --input_file2 ${patient_id}_${sample_id}.input.tsv --intermediate_file ${patient_id}_${sample_id}.intermediate.tsv --output_file ${patient_id}_${sample_id}.combined.sv.tsv
     """
 }
 
 // CNV calling & read-depth profiling
 process DELLY_CNV {
-    // publishDir("${params.pubdir}/${patient_id}/CNV", mode: 'copy')
+    publishDir("${params.pubdir}/${patient_id}/CNV", mode: 'copy')
     container "dellytools/delly:latest"
     tag "DELLY_CNV on ${patient_id}_${meta.sample_id}"
     debug true
     label "s_mem"
     
     input:
-    tuple val(patient_id), val(meta), path(bam), path(bai)
+    tuple val(patient_id), val(sample_id), val(meta), path(bam), path(bai)
 
     output:
-    tuple val(patient_id), val(meta), path("${meta.sample_id}.cnv.bcf"), path("${meta.sample_id}.cov.gz")
+    tuple val(patient_id), val(sample_id), val(meta), path("${meta.sample_id}.cnv.bcf"), path("${meta.sample_id}.cov.gz")
 
     script:
     """
@@ -272,33 +274,33 @@ process DELLY_CNV {
 process CNV_UNZIP {
     publishDir "${params.pubdir2}/${patient_id}/delly_hg38/CNV_cov/", mode: 'copy', pattern: "*.cov"
     container "ubuntu:22.04"
-    tag "CNV_UNZIP on ${patient_id}_${meta.sample_id}"
+    tag "CNV_UNZIP on ${patient_id}_${sample_id}"
     debug true
     label "xxs_mem"
     
     input:
-    tuple val(patient_id), val(meta), path(bcf), path(cov)
+    tuple val(patient_id), val(sample_id), val(meta), path(bcf), path(cov)
 
     output:
-    tuple val(patient_id), val(meta), path("${meta.sample_id}.cnv.bcf"), path("${meta.sample_id}.cov.gz"), path("${meta.sample_id}.cov")
+    tuple val(patient_id), val(sample_id), val(meta), path("${sample_id}.cnv.bcf"), path("${sample_id}.cov.gz"), path("${sample_id}.cov")
 
     script:
     """
-    gunzip -c ${meta.sample_id}.cov.gz > ${meta.sample_id}.cov
+    gunzip -c ${sample_id}.cov.gz > ${sample_id}.cov
     """
 }
 
 // Generation of plots using CNV profiles & segmentation
 process CNV_PROFILES {
     publishDir "${params.pubdir2}/${patient_id}/delly_hg38/CNV_plots/", mode: 'copy'
-    // publishDir("${params.pubdir}/${patient_id}/Rplots", mode: 'copy')
+    publishDir("${params.pubdir}/${patient_id}/Rplots", mode: 'copy')
     container "patricie/my-r-dnacopy-image:latest"
     tag "CNV_PROFILES on ${patient_id}_${meta.sample_id}"
     debug true
     label "xs_mem"
     
     input:
-    tuple val(patient_id), val(meta), path(bcf), path(cov)
+    tuple val(patient_id), val(sample_id), val(meta), path(bcf), path(cov)
 
     output:
     path("*")
@@ -351,26 +353,27 @@ process CNV_CALL_PLT {
 // Calculate coverage, average read_lenght, SV
 process COUNT_STATS{
     publishDir("${params.pubdir}/${patient_id}/stats", mode: 'copy')
-    container ""
+    container "patricie/python-sam-bcf-image:latest"
     tag "COUNT_STATS on ${patient_id}_${meta.sample_id}"
     debug true
     label "s_mem"
     
     input:
-    tuple val(patient_id), path(bam), path(bcf)
+    tuple val(patient_id), val(sample_id), val(meta), path(bam), path(bcf), path(csi)
 
     output:
-    path("${patient_id}_stats.txt")
+    path("aggregate_metrics.txt")
 
     script:
     """
     samtools stats ${bam} > ${patient_id}_stats.txt
-    grep '^COV' ${patient_id}_stats.txt | cut -f 2- >> ${patient_id}_stats.txt
-    py script
-    echo -n "Average length: " >> ${params.patient_id}_stats.txt
-    grep '^SN	average length:' ${params.patient_id}_stats.txt | cut -f 2- >> ${params.patient_id}_stats.txt
-    echo -n "SV count: " >> stats.txt
-    bcftools view -H ${bcf} | wc -l >> ${patient_id}_stats.txt
+    grep '^COV' ${patient_id}_${sample_id}_stats.txt | cut -f 2- >> ${patient_id}_${sample_id}_stats.txt
+    python ${params.script2} --input_file ${patient_id}_${sample_id}_stats.txt
+    echo -n "Average length: " >> ${patient_id}_${sample_id}_stats.txt
+    grep '^SN	average length:' ${patient_id}_${sample_id}_stats.txt | cut -f 2- >> ${patient_id}_${sample_id}_stats.txt
+    echo -n "SV count: " >> ${patient_id}_${sample_id}_stats.txt
+    bcftools view -H ${bcf} | wc -l >> ${patient_id}_${sample_id}_stats.txt
+    cat ${patient_id}_${sample_id}_stats.txt >> aggregate_metrics.txt
     """
 
 }

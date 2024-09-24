@@ -1,5 +1,5 @@
 include { test_bamToFastq_bwa; SAMTOOLS_BWA; MARK_DUPLICATES; DELLY_CALL; DELLY_PREFILTER; DELLY_GEN;
-DELLY_POSTFILTER; BCFTOOLS; ALFRED; MERGE_TSV; DELLY_CNV; CNV_UNZIP; CNV_PROFILES; CNV_CALLS; CNV_CALL_PLT  } from "${params.projectDirectory}/modules"
+DELLY_POSTFILTER; BCFTOOLS; ALFRED; MERGE_TSV; DELLY_CNV; CNV_UNZIP; CNV_PROFILES; CNV_CALLS; CNV_CALL_PLT; COUNT_STATS } from "${params.projectDirectory}/modules"
 
 workflow {
     tsv_ch = Channel.fromPath("/storage2/delly/Delly_somatic/samples_all_WGS.csv")
@@ -15,7 +15,8 @@ workflow {
     // .view() 
             
     bwa_ch = SAMTOOLS_BWA(fastq_ch)
-    mark_dup_ch = MARK_DUPLICATES(bwa_ch)//.view()
+    mark_dup_ch = MARK_DUPLICATES(bwa_ch)
+    // .view()
 
     // test_ch = Channel.fromFilePairs(['/home/user/Delly_somatic/test_bams/*.bam', '/home/user/Delly_somatic/test_bams/*.bai'])//.view()
     // .map{it -> [it[0], it[1][1], it[1][0]]}
@@ -25,12 +26,12 @@ workflow {
     tumor_bam_bai = mark_dup_ch
     .filter{ it[1].type == 'tumor' }
     .map{ it -> [it[0], it[1], it[2], it[3]]} 
-    //.view()
+    // .view()
 
     normal_bam_bai = mark_dup_ch
     .filter{ it[1].type == 'control' }
     .map{ it -> [it[0], it[1], it[2], it[3]]} 
-    .view()
+    // .view()
 
     sample_ch = normal_bam_bai.cross(tumor_bam_bai)//.view()
     .map{it -> [it[0][0], it[0][1], it[0][2], it[0][3], it[1][1], it[1][2], it[1][3]]}
@@ -71,22 +72,33 @@ workflow {
     // .view()
     post_filter_ch = DELLY_POSTFILTER(delly_gen_ch)
     // .view()
-    // bcf_ch = BCFTOOLS(post_filter_ch)
-    // alf_ch = ALFRED(bcf_ch)
-    // var_ch = MERGE_TSV(alf_ch)
+    bcf_ch = BCFTOOLS(post_filter_ch)
+    // .filter { it[0] == "BRNO1837" }
+    // .view()
+    alf_ch = ALFRED(bcf_ch)
+    var_ch = MERGE_TSV(alf_ch)
 
-    // cnv_ch = mark_dup_ch.map{ it -> [it[0], it[1], it[2], it[4]]}.view()
-    // delly_cnv_ch = DELLY_CNV(cnv_ch)
+    cnv_ch = mark_dup_ch
+    .map{ it -> [it[0], it[1].sample_id, it[1], it[2], it[3]]}
+    // .view()
+    delly_cnv_ch = DELLY_CNV(cnv_ch)
+    // .filter { it[0] == "BRNO0501" }
     // .view()
 
     // // this runs only ones
     // unzip_ch = CNV_UNZIP(delly_cnv_ch)
-
-    // plot_ch = CNV_PROFILES(delly_cnv_ch) //(delly_cnv_ch.first())
-
-    // // optional
-    // bcfcnv_ch = CNV_CALLS(delly_cnv_ch)
-    // cnvPlt_ch = CNV_CALL_PLT (bcfcnv_ch)
     
+    plot_ch = CNV_PROFILES(delly_cnv_ch) //(delly_cnv_ch.first())
+
+    // optional
+    bcfcnv_ch = CNV_CALLS(delly_cnv_ch)
+    cnvPlt_ch = CNV_CALL_PLT (bcfcnv_ch)
+
+    //if required - count statistics
+    stats_ch = tumor_bam_bai
+    .map{ it -> [it[0], it[1].sample_id, it[1], it[2]] }
+    .join(post_filter_ch, by: [0, 1])
+    // .view()
+    count_stats = COUNT_STATS(stats_ch.first())
 
 }
